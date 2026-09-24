@@ -164,6 +164,7 @@ The worker is controlled by the following GUCs:
 | pgsentinel_ash.max_entries     | int4      | Size of pg_active_session_history in-memory ring buffer |            1000 | 1000 |
 | pgsentinel.db_name        | char      |  database the worker should connect to          |          postgres | |
 | pgsentinel_ash.track_idle_trans     | boolean      | track session in idle in transaction state |            false |  |
+| pgsentinel_ash.yb_track_query_text     | boolean      | store query text in pg_active_session_history (`query`, `top_level_query`) |            false |  |
 | pgsentinel_pgssh.max_entries     | int4      | Size of pg_stat_statements_history in-memory ring buffer |            1000 | 1000 |
 | pgsentinel_pgssh.enable     | boolean      | enable pg_stat_statements_history |            false |  |
 
@@ -172,6 +173,7 @@ Remark
 
 * Some fields may be NULL depending on the version (for example, `leader_pid` is NULL for version <= 13.0...)
 * Since 1.5.1, `PUBLIC` can't execute `get_parsedinfo()`, which returns the raw query text of every backend. An existing install gets this only after `ALTER EXTENSION pgsentinel UPDATE`, run in each database that has the extension. A role granted `EXECUTE` sees the query text of all sessions.
+* `pgsentinel_ash.yb_track_query_text` is off by default, so `query` and `top_level_query` in `pg_active_session_history`, and `query` in `get_parsedinfo()`, are NULL; join `queryid` or `nested_queryid` to `pg_stat_statements` to get the normalized text. Setting it to `on` (requires a restart) stores the query text, which takes most of pgsentinel's shared memory: `2 x track_activity_query_size x pgsentinel_ash.max_entries` bytes for the ring buffer, plus `track_activity_query_size` bytes per backend.
 
 See how to query the view in this short video
 -------------
