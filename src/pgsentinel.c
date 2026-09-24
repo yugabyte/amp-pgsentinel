@@ -85,6 +85,7 @@ static int ash_max_entries = 1000;
 static int pgssh_max_entries = 10000;
 static bool pgssh_enable = false;
 static bool ash_track_idle_trans = false;
+bool yb_ash_track_query_text = false;
 static int ash_restart_wait_time = 2;
 static char *pgsentinelDbName = "postgres";
 
@@ -415,14 +416,17 @@ ash_entry_memsize(void)
 	size = add_size(size, mul_size(NAMEDATALEN, ash_max_entries));
 	/* AshEntryClientHostnameBuffer */
 	size = add_size(size, mul_size(NAMEDATALEN, ash_max_entries));
-	/* AshEntryQueryBuffer */
-	size = add_size(size, mul_size(pgstat_track_activity_query_size,
-															ash_max_entries));
 	/* AshEntryCmdTypeBuffer */
 	size = add_size(size, mul_size(NAMEDATALEN, ash_max_entries));
-	/* AshEntryTopLevelQueryBuffer */
-	size = add_size(size, mul_size(pgstat_track_activity_query_size,
-															ash_max_entries));
+	if (yb_ash_track_query_text)
+	{
+		/* AshEntryQueryBuffer */
+		size = add_size(size, mul_size(pgstat_track_activity_query_size,
+																ash_max_entries));
+		/* AshEntryTopLevelQueryBuffer */
+		size = add_size(size, mul_size(pgstat_track_activity_query_size,
+																ash_max_entries));
+	}
 	/* AshEntryBackendTypeBuffer */
 	size = add_size(size, mul_size(NAMEDATALEN, ash_max_entries));
 	/* AshEntryBlockerStateBuffer */
@@ -507,20 +511,23 @@ ash_shmem_startup(void)
 		MemSet(ProcEntryArray, 0, size);
 	}
 
-	size = mul_size(pgstat_track_activity_query_size, proc_entry_count);
-	ProcQueryBuffer = (char *) ShmemInitStruct("Proc Query Buffer", size,
-																	&found);
-
-	if (!found)
+	if (yb_ash_track_query_text)
 	{
-		MemSet(ProcQueryBuffer, 0, size);
+		size = mul_size(pgstat_track_activity_query_size, proc_entry_count);
+		ProcQueryBuffer = (char *) ShmemInitStruct("Proc Query Buffer", size,
+																		&found);
 
-		/* Initialize pointers. */
-		buffer = ProcQueryBuffer;
-		for (i = 0; i < proc_entry_count; i++)
+		if (!found)
 		{
-			ProcEntryArray[i].query= buffer;
-			buffer += pgstat_track_activity_query_size;
+			MemSet(ProcQueryBuffer, 0, size);
+
+			/* Initialize pointers. */
+			buffer = ProcQueryBuffer;
+			for (i = 0; i < proc_entry_count; i++)
+			{
+				ProcEntryArray[i].query= buffer;
+				buffer += pgstat_track_activity_query_size;
+			}
 		}
 	}
 
@@ -680,37 +687,44 @@ ash_shmem_startup(void)
 		}
 	}
 
-	size = mul_size(pgstat_track_activity_query_size, ash_max_entries);
-	AshEntryTopLevelQueryBuffer = (char *)
-		ShmemInitStruct("Ash Entry Top Level Query Buffer", size, &found);
-
-	if (!found)
+	/*
+	 * YB: With yb_ash_track_query_text off, the query buffers are never
+	 * allocated and the top_level_query and query pointers stay NULL.
+	 */
+	if (yb_ash_track_query_text)
 	{
-		MemSet(AshEntryTopLevelQueryBuffer, 0, size);
+		size = mul_size(pgstat_track_activity_query_size, ash_max_entries);
+		AshEntryTopLevelQueryBuffer = (char *)
+			ShmemInitStruct("Ash Entry Top Level Query Buffer", size, &found);
 
-		/* Initialize top level query pointers. */
-		buffer = AshEntryTopLevelQueryBuffer;
-		for (i = 0; i < ash_max_entries; i++)
+		if (!found)
 		{
-			AshEntryArray[i].top_level_query = buffer;
-			buffer += pgstat_track_activity_query_size;
+			MemSet(AshEntryTopLevelQueryBuffer, 0, size);
+
+			/* Initialize top level query pointers. */
+			buffer = AshEntryTopLevelQueryBuffer;
+			for (i = 0; i < ash_max_entries; i++)
+			{
+				AshEntryArray[i].top_level_query = buffer;
+				buffer += pgstat_track_activity_query_size;
+			}
 		}
-	}
 
-	size = mul_size(pgstat_track_activity_query_size, ash_max_entries);
-	AshEntryQueryBuffer = (char *)
-		ShmemInitStruct("Ash Entry Query Buffer", size, &found);
+		size = mul_size(pgstat_track_activity_query_size, ash_max_entries);
+		AshEntryQueryBuffer = (char *)
+			ShmemInitStruct("Ash Entry Query Buffer", size, &found);
 
-	if (!found)
-	{
-		MemSet(AshEntryQueryBuffer, 0, size);
-
-		/* Initialize query pointers. */
-		buffer = AshEntryQueryBuffer;
-		for (i = 0; i < ash_max_entries; i++)
+		if (!found)
 		{
-			AshEntryArray[i].query = buffer;
-			buffer += pgstat_track_activity_query_size;
+			MemSet(AshEntryQueryBuffer, 0, size);
+
+			/* Initialize query pointers. */
+			buffer = AshEntryQueryBuffer;
+			for (i = 0; i < ash_max_entries; i++)
+			{
+				AshEntryArray[i].query = buffer;
+				buffer += pgstat_track_activity_query_size;
+			}
 		}
 	}
 
@@ -858,14 +872,17 @@ ash_entry_store(TimestampTz ash_time, const int pid,
 								Min(strlen(blocker_state)+1,NAMEDATALEN-1));
 	memcpy(AshEntryArray[inserted].client_hostname,client_hostname,
 								Min(strlen(client_hostname)+1,NAMEDATALEN-1));
-	memcpy(AshEntryArray[inserted].top_level_query,query,
+	if (yb_ash_track_query_text)
+	{
+		memcpy(AshEntryArray[inserted].top_level_query,query,
 					Min((int) strlen(query)+1,pgstat_track_activity_query_size-1));
+		memcpy(AshEntryArray[inserted].query,gpi_query,Min((int) strlen(gpi_query)+1,
+										pgstat_track_activity_query_size-1));
+	}
 	memcpy(AshEntryArray[inserted].backend_type,backend_type,
 									Min(strlen(backend_type)+1,NAMEDATALEN-1));
 	memcpy(AshEntryArray[inserted].client_addr,client_addr,
 									Min(strlen(client_addr)+1,NAMEDATALEN-1));
-	memcpy(AshEntryArray[inserted].query,gpi_query,Min((int) strlen(gpi_query)+1,
-										pgstat_track_activity_query_size-1));
 	memcpy(AshEntryArray[inserted].cmdtype,cmdtype,Min((int) strlen(cmdtype)+1,
 																NAMEDATALEN-1));
 	AshEntryArray[inserted].client_port=client_port;
@@ -1166,7 +1183,7 @@ letswait:
 				/* gpi query */
 				data=SPI_getbinval(SPI_tuptable->vals[i],SPI_tuptable->tupdesc,
 																		27, &isnull);
-				if (!isnull) {
+				if (!isnull && yb_ash_track_query_text) {
 					gpi_queryvalue = TextDatumGetCString(data);
 				}
 
@@ -1195,7 +1212,7 @@ letswait:
 				/* gpi query */
 				data=SPI_getbinval(SPI_tuptable->vals[i],SPI_tuptable->tupdesc,
 																		26, &isnull);
-				if (!isnull) {
+				if (!isnull && yb_ash_track_query_text) {
 					gpi_queryvalue = TextDatumGetCString(data);
 				}
 
@@ -1217,7 +1234,7 @@ letswait:
 				/* query */
 				data=SPI_getbinval(SPI_tuptable->vals[i],SPI_tuptable->tupdesc,
 																19, &isnull);
-				if (!isnull) {
+				if (!isnull && yb_ash_track_query_text) {
 					queryvalue = TextDatumGetCString(data);
 				}
 
@@ -1403,6 +1420,19 @@ pgsentinel_load_params(void)
 							1000,
 							1000,
 							INT_MAX,
+							PGC_POSTMASTER,
+							0,
+							NULL,
+							NULL,
+							NULL);
+
+	DefineCustomBoolVariable("pgsentinel_ash.yb_track_query_text",
+	                        "Store query text in pg_active_session_history.",
+							"When off, the query and top_level_query columns are NULL and "
+							"no shared memory is reserved for query text. Use queryid to "
+							"look up the text in pg_stat_statements.",
+							&yb_ash_track_query_text,
+							false,
 							PGC_POSTMASTER,
 							0,
 							NULL,
@@ -1687,7 +1717,10 @@ pg_active_session_history_internal(FunctionCallInfo fcinfo)
 		show_text = is_allowed_role || AshEntryArray[i].usesysid == userid;
 
 		// top_level_query - apply privilege check
-		if (show_text)
+		// YB: NULL when yb_ash_track_query_text is off
+		if (!yb_ash_track_query_text)
+			nulls[j++] = true;
+		else if (show_text)
 		{
 			if (AshEntryArray[i].top_level_query[0] != '\0')
 				values[j++] = CStringGetTextDatum(AshEntryArray[i].top_level_query);
@@ -1700,7 +1733,10 @@ pg_active_session_history_internal(FunctionCallInfo fcinfo)
 		}
 
 		// query - apply privilege check
-		if (show_text)
+		// YB: NULL when yb_ash_track_query_text is off
+		if (!yb_ash_track_query_text)
+			nulls[j++] = true;
+		else if (show_text)
 		{
 			if (AshEntryArray[i].query[0] != '\0')
 				values[j++] = CStringGetTextDatum(AshEntryArray[i].query);

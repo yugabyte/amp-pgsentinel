@@ -24,6 +24,9 @@ extern void getparsedinfo_post_parse_analyze(ParseState *pstate, Query *query, c
 extern Size proc_entry_memsize(void);
 extern int get_max_procs_count(void);
 
+/* YB: GUC to store query text in shared memory */
+extern bool yb_ash_track_query_text;
+
 typedef struct procEntry
 {
         uint64 queryid;

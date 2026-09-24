@@ -46,8 +46,9 @@ proc_entry_memsize(void)
 	/* ProcEntryArray */
 	size = mul_size(sizeof(procEntry), get_max_procs_count());
 	/* ProEntryQueryBuffer */
-	size = add_size(size, mul_size(pgstat_track_activity_query_size,
-													get_max_procs_count()));
+	if (yb_ash_track_query_text)
+		size = add_size(size, mul_size(pgstat_track_activity_query_size,
+														get_max_procs_count()));
 	/* ProEntryCmdTypeBuffer */
 	size = add_size(size, mul_size(NAMEDATALEN, get_max_procs_count()));
 	return size;
@@ -155,9 +156,12 @@ getparsedinfo_post_parse_analyze(ParseState *pstate, Query *query, const JumbleS
 		query_len = (int) strlen(querytext);
 #endif
 
-		minlen = Min(query_len,pgstat_track_activity_query_size-1);
-		memcpy(ProcEntryArray[i].query,querytext,minlen);
-		ProcEntryArray[i].query[minlen]='\0';
+		if (yb_ash_track_query_text)
+		{
+			minlen = Min(query_len,pgstat_track_activity_query_size-1);
+			memcpy(ProcEntryArray[i].query,querytext,minlen);
+			ProcEntryArray[i].query[minlen]='\0';
+		}
 		switch (query->commandType)
 		{
 			case CMD_SELECT:
@@ -243,7 +247,9 @@ get_parsedinfo(PG_FUNCTION_ARGS)
 				values[1] = Int64GetDatum(ProcEntryArray[i].queryid);
 			else
 				nulls[1] = true;
-			if (CStringGetTextDatum(ProcEntryArray[i].query))
+			if (!yb_ash_track_query_text)
+				nulls[2] = true;
+			else if (CStringGetTextDatum(ProcEntryArray[i].query))
         			values[2] = CStringGetTextDatum(ProcEntryArray[i].query);
 			else
 				nulls[2] = true;
