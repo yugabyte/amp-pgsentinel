@@ -161,7 +161,7 @@ The worker is controlled by the following GUCs:
 |         Parameter name              | Data type |                  Description                | Default value | Min value  |
 | ----------------------------------- | --------- | ------------------------------------------- | ------------  | -------- |
 | pgsentinel_ash.sampling_period     | int4      | Period for history sampling in seconds |            1 | 1 |
-| pgsentinel_ash.max_entries     | int4      | Size of pg_active_session_history in-memory ring buffer |            1000 | 1000 |
+| pgsentinel_ash.max_entries     | int4      | Size of pg_active_session_history in-memory ring buffer |            max_connections x 300 | 1000 |
 | pgsentinel.db_name        | char      |  database the worker should connect to          |          postgres | |
 | pgsentinel_ash.track_idle_trans     | boolean      | track session in idle in transaction state |            false |  |
 | pgsentinel_ash.yb_track_query_text     | boolean      | store query text in pg_active_session_history (`query`, `top_level_query`) |            false |  |

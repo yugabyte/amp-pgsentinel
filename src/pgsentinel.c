@@ -1468,11 +1468,17 @@ pgsentinel_load_params(void)
 		return;
 
 	/* can't define PGC_POSTMASTER variable after startup */
+	/*
+	 * YB: default to 300 entries per connection: 5 minutes of samples at a 1s
+	 * sampling_period with every connection active. Assert builds require the
+	 * variable to equal the boot value, so set it first.
+	 */
+	ash_max_entries = Max(MaxConnections * 300, 1000);
 	DefineCustomIntVariable("pgsentinel_ash.max_entries",
 							"Maximum number of ash entries.",
 							NULL,
 							&ash_max_entries,
-							1000,
+							ash_max_entries,
 							1000,
 							INT_MAX,
 							PGC_POSTMASTER,

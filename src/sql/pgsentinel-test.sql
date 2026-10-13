@@ -125,5 +125,11 @@ RESET ROLE;
 REVOKE EXECUTE ON FUNCTION get_parsedinfo(int) FROM test_gpi_unprivileged;
 DROP ROLE test_gpi_unprivileged;
 
+-- YB: tests for the pgsentinel_ash.max_entries default
+-- The default is 300 entries per connection.
+SELECT boot_val::int = current_setting('max_connections')::int * 300
+       AS max_entries_default_scales
+FROM pg_settings WHERE name = 'pgsentinel_ash.max_entries';
+
 DROP EXTENSION pgsentinel;
 DROP EXTENSION pg_stat_statements;
