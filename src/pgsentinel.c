@@ -492,12 +492,14 @@ ash_shmem_startup(void)
 	if (pgssh_enable)
 		pgssh_entry_lock = &(GetNamedLWLockTranche("Pgssh Entry Array"))->lock;
 
+	/*
+	 * YB: Each start or crash restart maps a fresh, zero-filled segment, so
+	 * the ASH ring is not zeroed. Its string buffers become resident only as
+	 * slots are written.
+	 */
 	size = mul_size(sizeof(ashEntry), ash_max_entries);
 	AshEntryArray = (ashEntry *) ShmemInitStruct("Ash Entry Array", size,
 																		&found);
-
-	if (!found)
-		MemSet(AshEntryArray, 0, size);
 
 	size = mul_size(sizeof(intEntry), 1);
 	IntEntryArray = (intEntry *) ShmemInitStruct("int Entry Array", size,
@@ -584,8 +586,6 @@ ash_shmem_startup(void)
 
 	if (!found)
 	{
-		MemSet(AshEntryUsenameBuffer, 0, size);
-
 		/* Initialize usename pointers. */
 		buffer = AshEntryUsenameBuffer;
 		for (i = 0; i < ash_max_entries; i++)
@@ -602,8 +602,6 @@ ash_shmem_startup(void)
 
 	if (!found)
 	{
-		MemSet(AshEntryDatnameBuffer, 0, size);
-
 		/* Initialize Datname pointers. */
 		buffer = AshEntryDatnameBuffer;
 		for (i = 0; i < ash_max_entries; i++)
@@ -620,8 +618,6 @@ ash_shmem_startup(void)
 
 	if (!found)
 	{
-		MemSet(AshEntryAppnameBuffer, 0, size);
-
 		/* Initialize Appname pointers. */
 		buffer = AshEntryAppnameBuffer;
 		for (i = 0; i < ash_max_entries; i++)
@@ -637,8 +633,6 @@ ash_shmem_startup(void)
 
 	if (!found)
 	{
-		MemSet(AshEntryClientaddrBuffer, 0, size);
-
 		/* Initialize Client Addr pointers. */
 		buffer = AshEntryClientaddrBuffer;
 		for (i = 0; i < ash_max_entries; i++)
@@ -654,8 +648,6 @@ ash_shmem_startup(void)
 
 	if (!found)
 	{
-		MemSet(AshEntryWaitEventTypeBuffer, 0, size);
-
 		/* Initialize wait event type pointers. */
 		buffer = AshEntryWaitEventTypeBuffer;
 		for (i = 0; i < ash_max_entries; i++)
@@ -671,8 +663,6 @@ ash_shmem_startup(void)
 
 	if (!found)
 	{
-		MemSet(AshEntryWaitEventBuffer, 0, size);
-
 		/* Initialize wait event pointers. */
 		buffer = AshEntryWaitEventBuffer;
 		for (i = 0; i < ash_max_entries; i++)
@@ -689,8 +679,6 @@ ash_shmem_startup(void)
 
 	if (!found)
 	{
-		MemSet(AshEntryStateBuffer, 0, size);
-
 		/* Initialize state pointers. */
 		buffer = AshEntryStateBuffer;
 		for (i = 0; i < ash_max_entries; i++)
@@ -706,8 +694,6 @@ ash_shmem_startup(void)
 
 	if (!found)
 	{
-		MemSet(AshEntryClientHostnameBuffer, 0, size);
-
 		/* Initialize client hostname pointers. */
 		buffer = AshEntryClientHostnameBuffer;
 		for (i = 0; i < ash_max_entries; i++)
@@ -729,8 +715,6 @@ ash_shmem_startup(void)
 
 		if (!found)
 		{
-			MemSet(AshEntryTopLevelQueryBuffer, 0, size);
-
 			/* Initialize top level query pointers. */
 			buffer = AshEntryTopLevelQueryBuffer;
 			for (i = 0; i < ash_max_entries; i++)
@@ -746,8 +730,6 @@ ash_shmem_startup(void)
 
 		if (!found)
 		{
-			MemSet(AshEntryQueryBuffer, 0, size);
-
 			/* Initialize query pointers. */
 			buffer = AshEntryQueryBuffer;
 			for (i = 0; i < ash_max_entries; i++)
@@ -764,8 +746,6 @@ ash_shmem_startup(void)
 
 	if (!found)
 	{
-		MemSet(AshEntryCmdTypeBuffer, 0, size);
-
 		/* Initialize cmdtype pointers. */
 		buffer = AshEntryCmdTypeBuffer;
 		for (i = 0; i < ash_max_entries; i++)
@@ -782,8 +762,6 @@ ash_shmem_startup(void)
 
 	if (!found)
 	{
-		MemSet(AshEntryBackendTypeBuffer, 0, size);
-
 		/* Initialize backend type pointers. */
 		buffer = AshEntryBackendTypeBuffer;
 		for (i = 0; i < ash_max_entries; i++)
@@ -799,8 +777,6 @@ ash_shmem_startup(void)
 
 	if (!found)
 	{
-		MemSet(AshEntryBlockerStateBuffer, 0, size);
-
 		/* Initialize state pointers. */
 		buffer = AshEntryBlockerStateBuffer;
 		for (i = 0; i < ash_max_entries; i++)
